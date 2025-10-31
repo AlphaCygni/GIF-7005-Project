@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+#MlFlow
+mlruns/
+mlartifacts/
+scaler.joblib
+body_coordinates_and_velocities_from_1749-12-31_to_2200-01-09.json

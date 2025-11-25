@@ -22,7 +22,7 @@ class SolarSystemDataset(Dataset):
         self.feature_columns = ['x', 'y', 'z', 'vx', 'vy', 'vz', 'body_mass']
         self.num_features = len(self.feature_columns)
         
-        df_sorted = dataframe.sort_values('datetime_jd').reset_index(drop=True)
+        df_sorted = dataframe.sort_values(['datetime_jd', 'body_id']).reset_index(drop=True)
         grouped = df_sorted.groupby('datetime_jd')
         
         self.num_timesteps = len(grouped)

@@ -10,7 +10,7 @@ class InteractionNetwork(MessagePassing):
         
         # Edge Model: computes messages
         self.edge_mlp = nn.Sequential(
-            nn.Linear(2 * node_dim, edge_dim), # Takes concatenated features of two nodes
+            nn.Linear(2 * node_dim + 4, edge_dim), # Takes concatenated features of two nodes
             nn.ReLU(),
             nn.Linear(edge_dim, edge_dim),
         )
@@ -22,20 +22,23 @@ class InteractionNetwork(MessagePassing):
             nn.Linear(node_dim, node_dim),
         )
 
-    def forward(self, x, edge_index):
+    def forward(self, x, pos, edge_index):
         # The 'propagate' method calls message(), aggregate(), and update() internally.
         # j: source node, i: target node
-        return self.propagate(edge_index, x=x)
+        return self.propagate(edge_index, x=x, pos=pos)
 
-    def message(self, x_i, x_j):
-        # x_i: features of target nodes [num_edges, node_dim]
-        # x_j: features of source nodes [num_edges, node_dim]
+    def message(self, x_i, x_j, pos_i, pos_j):
+        # x_i, x_j are [N, 7] (pos, vel, mass)
         
+        # Extract positions (first 3 cols)
+        rel_pos = pos_j - pos_i            # Vector difference
+        dist = torch.norm(rel_pos, dim=1, keepdim=True) # Distance scalar
+
         # Concatenate features of source and target nodes to create edge features
-        edge_features = torch.cat([x_i, x_j], dim=1)
+        edge_input = torch.cat([x_i, x_j, rel_pos, dist], dim=1)
         
         # Compute the message using the edge model
-        message = self.edge_mlp(edge_features)
+        message = self.edge_mlp(edge_input)
         return message
 
     def update(self, aggregated_messages, x):
@@ -62,22 +65,22 @@ class GNN_NBody(nn.Module):
             self.interaction_layers.append(InteractionNetwork(model_dim, model_dim))
 
         # 3. Decode the final node embeddings to get predicted acceleration
-        self.output_decoder = nn.Linear(model_dim, 6) # Predicts 3D acceleration (x, y, z, vx, vy, vz)
+        self.output_decoder = nn.Linear(model_dim, 6) # Predicts delta position and velocities
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
 
+        pos = x[:, 0:3] 
+
         # Encode node features
-        x = self.node_encoder(x)
+        h = self.node_encoder(x)
 
         # Pass through interaction layers
         for layer in self.interaction_layers:
             # We add a residual connection for better training stability
-            x = x + layer(x, edge_index)
+            h = h + layer(h, pos, edge_index)
 
-        # Decode to get acceleration
-        acceleration = self.output_decoder(x)
-        return acceleration
+        return self.output_decoder(h)
     
     def train_one_epoch(self, training_loader, loss_fn, optimizer):
         running_loss = 0.

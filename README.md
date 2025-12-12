@@ -6,6 +6,12 @@ This project focuses on predicting the coordinates and velocities of solar syste
 
 The core objective is to evaluate whether adding a physics-informed loss term—derived from Newton's Law of Universal Gravitation—improves the accuracy and generalizability of the models compared to purely data-driven "vanilla" approaches.
 
+### Dataset Source & Accuracy
+The dataset for this project is sourced via **`astroquery.jplhorizons`**, which interfaces with the **NASA/JPL Horizons On-Line Ephemeris System**. This system provides highly accurate orbital data based on the **Development Ephemerides (DE440/DE441)** produced by the Jet Propulsion Laboratory.
+*   **DE440 (Modern Era)**: Optimized for the period 1550–2650, offering sub-meter accuracy for inner planets and kilometer-level accuracy for outer planets, integrated from spacecraft range data (e.g., Juno, Cassini).
+*   **Ground Truth**: These ephemerides serve as the international standard for solar system dynamics, making them an ideal "ground truth" for training and validating our machine learning models.
+
+
 ## Key Features
 
 *   **Model Comparison**: Comprehensive evaluation of multiple model architectures:
@@ -46,7 +52,20 @@ The model architecture follows the **Interaction Network** paradigm, which align
     *   **Processor**: 3 stacked Interaction Network layers with **residual connections** refine these embeddings. This allows the model to learn complex, non-linear dependencies over multiple "steps" of reasoning.
     *   **Decoder**: Projects the final latent state back to physical outputs (predicted change in position and velocity).
 
-## Results
+<p align="center">
+  <img src="Images/SolarSystemGNN_Simplified.png" width="75%" heigth="75%" alt="output">
+</p>
+
+## Interesting Results
+
+*   **Loss physics-informed negative impact on planets close to the sun**: We suspect the Loss physics-informed is introducing noise in the predictions of the planets close to the sun due to the relativistic effects happening when big masses are close to each other.
+
+*   **Loss physics-informed negative impact on planets low planet moon mass ratios**: Our dataset does not explicitly contain state information for moons. However, the planetary trajectories used for training are physically gravitationally perturbed by these satellites. This discrepancy creates noise in the physics-informed loss function, particularly for systems with high satellite-to-planet mass ratios. The graph below demonstrates this impact on Earth predictions by comparing the physics-informed loss when using the Earth-Moon Barycenter as the reference frame versus the Earth's geometric center and the combined Earth-Moon mass. This comparison is critical for the Earth-Moon system, as the Moon represents approximately 1% of Earth's mass—a ratio large enough to cause significant trajectory wobbles that confuse the model.
+
+<p align="center">
+  <img src="Images/EarthPhysicLoss_Earth_vs_EarthMoonBarycenter.png" width="50%" alt="output">
+</p>
+
 
 *(This section is reserved for manual insertion of pertinent result images and charts.)*
 

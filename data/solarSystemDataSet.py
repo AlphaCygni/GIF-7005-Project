@@ -96,15 +96,16 @@ class SequentialSolarSystemDataset(Dataset):
         return len(self.states) - self.sequence_length
 
     def __getitem__(self, idx):
-        # Entrée : Séquence de 'sequence_length' jours
-        # Forme : (Sequence_Length, N_corps, 7)
+        # Séquence d'entrée (les jours précédents)
         sequence_in = torch.stack(self.states[idx: idx + self.sequence_length])
 
-        # Cible : Le jour suivant la séquence
-        target_state = self.states[idx + self.sequence_length]
+        # État actuel (dernier jour de la séquence) et état futur (cible)
+        state_t = self.states[idx + self.sequence_length - 1]
+        state_t1 = self.states[idx + self.sequence_length]
 
-        # On prédit les 6 premières variables (pos, vel), on ignore la masse pour la cible
-        # Forme : (N_corps, 6)
-        target = target_state[:, 0:6]
+        # On veut prédire la DIFFÉRENCE (le mouvement)
+        # Cible = (Position t+1) - (Position t)
+        # On ne garde que les 6 premières colonnes (pos, vel)
+        target_delta = state_t1[:, 0:6] - state_t[:, 0:6]
 
-        return sequence_in, target
+        return sequence_in, target_delta

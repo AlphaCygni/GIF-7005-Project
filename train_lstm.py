@@ -4,8 +4,7 @@ from torch.utils.data import DataLoader
 import pandas as pd
 from joblib import load
 from tqdm import tqdm
-
-# Imports de vos modules
+import numpy as np
 from model.SolarLSTM import SolarLSTM
 from data.solarSystemDataSet import SequentialSolarSystemDataset
 
@@ -19,6 +18,7 @@ LR = 1e-3
 # 1. Chargement des données
 # Assurez-vous que le chemin pointe vers vos données d'entraînement JSON
 df_train = pd.read_json("data/body_coordinates_and_velocities_from_1749-12-31_to_2200-01-09.json", lines=True)  #
+df_train['body_mass'] = np.log10(df_train['body_mass'])
 # Mettre le bon chemin
 scaler = load("model_25-11-25/scaler.joblib")
 

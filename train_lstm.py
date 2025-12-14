@@ -76,14 +76,20 @@ for epoch in range(EPOCHS):
             predictions = model(sequences)
 
             # Calcul des valeurs normalisées attendues
-            input_pos_vel = batch.x[:, 0:6]
-            target_pos_vel = batch.y
-            raw_delta = target_pos_vel - input_pos_vel
+            last_inputs_in_sequences = sequences[:, -1, :, :]
+            last_inputs_pos_vel = last_inputs_in_sequences[:, :, 0:6]
+            raw_delta = targets - last_inputs_pos_vel
             target_delta_scaled = raw_delta * DELTA_SCALER
+
+            # Préparation des tenseurs utilisés pour le calcul de la perte physique
+            B, N, _ = predictions.shape
+            predictions_flatten = predictions.reshape(B * N, 6)
+            inputs_flatten  = last_inputs_in_sequences.reshape(B * N, 7)
+            batch_vector = torch.arange(B, device=predictions.device, dtype=torch.long).repeat_interleave(N)
 
             # Loss
             train_loss_std = std_criterion(predictions, target_delta_scaled)
-            train_loss_phy = phy_criterion(predictions, sequences.x, sequences.batch) * PHYSICS_LOSS_MULTIPLIER
+            train_loss_phy = phy_criterion(predictions_flatten, inputs_flatten, batch_vector) * PHYSICS_LOSS_MULTIPLIER
             train_loss = train_loss_std * STANDARD_LOSS_WEIGHT + (1 - STANDARD_LOSS_WEIGHT) * train_loss_phy
 
             # Backward
@@ -98,39 +104,47 @@ for epoch in range(EPOCHS):
     # Phase de validation
     model.eval()
     total_val_loss = 0
-    total_val_phy_loss = 0
-    total_val_std_loss = 0
     with torch.no_grad():
-        for batch in val_loader:
-            batch = batch.to(DEVICE)
+        with tqdm(val_loader, unit="batch") as tepoch:
+            tepoch.set_description(f"Epoch {epoch + 1}/{EPOCHS}")
 
-            # Forward
-            predictions = model(batch)
-            
-            # Calcul des valeurs normalisées attendues
-            input_pos_vel = batch.x[:, 0:6]
-            target_pos_vel = batch.y
-            raw_delta = target_pos_vel - input_pos_vel
-            target_delta_scaled = raw_delta * DELTA_SCALER
+            for sequences, targets in tepoch:
+                # sequences : (Batch, Seq_Len, N_corps, 7)
+                # targets   : (Batch, N_corps, 6)
+                sequences, targets = sequences.to(DEVICE), targets.to(DEVICE)
 
-            # Loss
-            val_loss_std = std_criterion(predictions, target_delta_scaled)
-            val_loss_phy = phy_criterion(predictions, sequences.x, sequences.batch) * PHYSICS_LOSS_MULTIPLIER
-            val_loss = val_loss_std * STANDARD_LOSS_WEIGHT + (1 - STANDARD_LOSS_WEIGHT) * val_loss_phy
+                # Forward
+                predictions = model(sequences)
+                
+                # Calcul des valeurs normalisées attendues
+                last_inputs_in_sequences = sequences[:, -1, :, :]
+                last_inputs_pos_vel = last_inputs_in_sequences[:, :, 0:6]
+                raw_delta = targets - last_inputs_pos_vel
+                target_delta_scaled = raw_delta * DELTA_SCALER
 
-            # Accumulation
-            total_val_loss += val_loss.item()
+                # Préparation des tenseurs utilisés pour le calcul de la perte physique
+                B, N, _ = predictions.shape
+                predictions_flatten = predictions.reshape(B * N, 6)
+                inputs_flatten  = last_inputs_in_sequences.reshape(B * N, 7)
+                batch_vector = torch.arange(B, device=predictions.device, dtype=torch.long).repeat_interleave(N)
 
-    # Calcul des Moyennes Finales
-    num_batches = len(val_loader)
-    avg_val_loss = total_val_loss / num_batches
-    print(f"Epoch {epoch + 1} - Validation Avg Loss: {avg_val_loss:.6f}")
+                # Loss
+                val_loss_std = std_criterion(predictions, target_delta_scaled)
+                val_loss_phy = phy_criterion(predictions_flatten, inputs_flatten, batch_vector) * PHYSICS_LOSS_MULTIPLIER
+                val_loss = val_loss_std * STANDARD_LOSS_WEIGHT + (1 - STANDARD_LOSS_WEIGHT) * val_loss_phy
 
-    if avg_val_loss < best_val_loss:
-        best_val_loss = avg_val_loss
-        # Save the model weights locally to disk
-        torch.save(model.state_dict(), best_model_path)
-        print(f"   >>> New Best Model Found! Loss: {best_val_loss:.6f}")
+                # Accumulation
+                total_val_loss += val_loss.item()
+
+        # Calcul des Moyennes Finales
+        avg_val_loss = total_val_loss / len(val_loader)
+        print(f"Epoch {epoch + 1} - Validation Avg Loss: {avg_val_loss:.6f}")
+
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            # Save the model weights locally to disk
+            torch.save(model.state_dict(), best_model_path)
+            print(f"   >>> New Best Model Found! Loss: {best_val_loss:.6f}")
 
 # 5. Sauvegarde
 model.load_state_dict(torch.load(best_model_path))

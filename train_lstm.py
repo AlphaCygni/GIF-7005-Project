@@ -10,6 +10,7 @@ from data.solarSystemDataSet import SequentialSolarSystemDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from PhysicsInformedLoss import PhysicsInformedLoss
+import joblib
 
 # Configuration
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,12 +29,15 @@ train_timesteps, val_timesteps = train_test_split(timesteps, train_size=0.8, shu
 df_train = dataframe[dataframe['datetime_jd'].isin(train_timesteps)]
 df_train['body_mass'] = np.log10(df_train['body_mass'])
 df_val = dataframe[dataframe['datetime_jd'].isin(val_timesteps)]
-df_val['body_mass'] = np.log10(df_train['body_mass'])
+df_val['body_mass'] = np.log10(df_val['body_mass'])
 
 # Initialisation du scaler à partir des données d'entraînement
 feature_columns = ['x', 'y', 'z', 'vx', 'vy', 'vz', 'body_mass']
 scaler = StandardScaler()
 scaler.fit(df_train[feature_columns].values)
+
+scaler_path = "scaler.joblib"
+joblib.dump(scaler, scaler_path)
 
 # 2. Création du Dataset et DataLoader
 train_dataset = SequentialSolarSystemDataset(df_train, scaler, sequence_length=SEQ_LEN)
@@ -78,8 +82,7 @@ for epoch in range(EPOCHS):
             # Calcul des valeurs normalisées attendues
             last_inputs_in_sequences = sequences[:, -1, :, :]
             last_inputs_pos_vel = last_inputs_in_sequences[:, :, 0:6]
-            raw_delta = targets - last_inputs_pos_vel
-            target_delta_scaled = raw_delta * DELTA_SCALER
+            target_delta_scaled = targets * DELTA_SCALER
 
             # Préparation des tenseurs utilisés pour le calcul de la perte physique
             B, N, _ = predictions.shape
@@ -119,8 +122,7 @@ for epoch in range(EPOCHS):
                 # Calcul des valeurs normalisées attendues
                 last_inputs_in_sequences = sequences[:, -1, :, :]
                 last_inputs_pos_vel = last_inputs_in_sequences[:, :, 0:6]
-                raw_delta = targets - last_inputs_pos_vel
-                target_delta_scaled = raw_delta * DELTA_SCALER
+                target_delta_scaled = targets * DELTA_SCALER
 
                 # Préparation des tenseurs utilisés pour le calcul de la perte physique
                 B, N, _ = predictions.shape
